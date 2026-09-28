@@ -42,27 +42,35 @@ box.innerHTML = Object.entries(FONTES).map(([k, v]) =>
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 
+const seguro = (u) => (/^https?:\/\//i.test(u) ? u : "#");
+const brl = (v) => (typeof v === "number" ? v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : v);
+
 document.getElementById("f").addEventListener("submit", async (e) => {
   e.preventDefault();
   const q = document.getElementById("q").value.trim();
   const fontes = [...box.querySelectorAll("input:checked")].map((i) => i.value).join(",");
   const out = document.getElementById("out");
+  const btn = e.target.querySelector("button");
+  if (!fontes) { out.textContent = "Marque ao menos uma fonte."; return; }
   out.textContent = "Buscando…";
+  btn.disabled = true;
   try {
     const r = await fetch(`${SUPABASE_URL}/functions/v1/buscar?q=${encodeURIComponent(q)}&fontes=${fontes}`, {
       headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, apikey: SUPABASE_ANON_KEY },
     });
     const data = await r.json();
+    if (!r.ok) throw new Error(data.erro || data.message || `HTTP ${r.status}`);
     out.innerHTML = Object.entries(data).map(([f, itens]) => {
       const lista = Array.isArray(itens) ? itens : [itens];
       const html = lista.length ? lista.map((i) => `
         <div class="item">
-          ${i.url ? `<a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.titulo || i.url)}</a>` : `<strong>${esc(i.titulo || i.aviso || i.erro || "—")}</strong>`}
-          <div class="meta">${[i.orgao, i.fornecedor, i.valor && "R$ " + i.valor, i.data, i.como_obter, i.aviso && i.titulo ? i.aviso : ""].filter(Boolean).map(esc).join(" · ")}</div>
+          ${i.url ? `<a href="${esc(seguro(i.url))}" target="_blank" rel="noopener">${esc(i.titulo || i.url)}</a>` : `<strong>${esc(i.titulo || i.aviso || i.erro || "—")}</strong>`}
+          <div class="meta">${[i.orgao, i.municipio && i.uf ? i.municipio + "/" + i.uf : i.uf, i.fornecedor, i.valor != null && brl(i.valor), i.data, i.como_obter, i.aviso && i.titulo ? i.aviso : ""].filter(Boolean).map(esc).join(" · ")}</div>
         </div>`).join("") : `<div class="meta">Sem resultados.</div>`;
       return `<h2>${esc(FONTES[f] || f)}</h2>${html}`;
     }).join("");
   } catch (err) { out.textContent = "Erro: " + err.message; }
+  finally { btn.disabled = false; }
 });
 </script>
 </body>
